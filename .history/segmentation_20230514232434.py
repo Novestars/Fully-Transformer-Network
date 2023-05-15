@@ -139,21 +139,21 @@ class FTN(nn.Module):
 def FTN_4(pretrained=False, **kwargs): # adopt performer for tokens to token
     if pretrained:
         kwargs.setdefault('qk_scale', 256 ** -0.5)
-    model = FTN( embed_dim=512, depth=4, num_heads=2, mlp_ratio=2.,token_dim=64,num_classes=2,  **kwargs)
+    model = FTN( embed_dim=512, depth=4, num_heads=2, mlp_ratio=2.,token_dim=64,  **kwargs)
     model.default_cfg = default_cfgs['FTN_4']
     return model
 @register_model
 def FTN_7(pretrained=False,  **kwargs): # adopt performer for tokens to token
     if pretrained:
         kwargs.setdefault('qk_scale', 256 ** -0.5)
-    model = FTN( embed_dim=256, depth=12, num_heads=3, mlp_ratio=2.,token_dim=64,num_classes=2,  **kwargs)
+    model = FTN( embed_dim=256, depth=12, num_heads=3, mlp_ratio=2.,token_dim=64,  **kwargs)
     model.default_cfg = default_cfgs['FTN_7']
     return model
 @register_model
 def FTN_12(pretrained=False,  **kwargs): # adopt performer for tokens to token
     if pretrained:
         kwargs.setdefault('qk_scale', 256 ** -0.5)
-    model = FTN( embed_dim=384, depth=12, num_heads=4, mlp_ratio=2.,token_dim=64, num_classes=2, **kwargs)
+    model = FTN( embed_dim=384, depth=12, num_heads=4, mlp_ratio=2.,token_dim=64,  **kwargs)
     model.default_cfg = default_cfgs['FTN_12']
     return model
 

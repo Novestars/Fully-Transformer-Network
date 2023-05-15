@@ -27,16 +27,22 @@ class FTN_encoder(nn.Module):
     def forward(self, x):
         encoder_list = []
         B = x.shape[0]
+        # step0 encoder 0: apply sliding window tokenization for spatial dimension reduction and local information
+        # then utilize Spatial Transformer to aggregate global information
         x = self.swt_0(x).view(B,self.token_dim,-1).transpose(1, 2)
         x = self.attention1(x)
         B, new_HW, C = x.shape
         x = x.transpose(1,2).reshape(B, C, int(np.sqrt(new_HW)), int(np.sqrt(new_HW)))
+
+        # Step1 encoder 1: soft split
         encoder_list.append(x)
         x = self.swt_1(x).view(B,self.token_dim,-1).transpose(1, 2)
         x = self.attention2(x)
         B, new_HW, C = x.shape
         x = x.transpose(1, 2).reshape(B, C, int(np.sqrt(new_HW)), int(np.sqrt(new_HW)))
         encoder_list.append(x)
+
+        # Step2: apply sliding window tokenization to simultaneously reduce the spatial dimension and increase channels number
         x = self.swt_2(x).view(B,self.embed_dim,-1).transpose(1, 2)
 
         return x,encoder_list
@@ -52,26 +58,23 @@ class FTN_decoder(nn.Module):
 
         self.proj = nn.Sequential(nn.Linear(self.embed_dim,self.token_dim))
 
-        self.attention1 = SpatialTransformer(dim=token_dim*2, in_dim=token_dim*2, num_heads=1, mlp_ratio=1.0,attn_drop = 0.0,drop_path=0,drop=0.)
-        self.attention2 = SpatialTransformer(dim=token_dim*2, in_dim=token_dim*2, num_heads=1, mlp_ratio=1.0,attn_drop = 0.0,drop_path=0,drop=0.)
-        self.swt_0 = nn.Sequential(nn.Conv2d(token_dim*2,token_dim, kernel_size=(3, 3),  padding=(1, 1)))
+        self.attention1 = SpatialTransformer(dim=token_dim, in_dim=token_dim, num_heads=1, mlp_ratio=1.0,attn_drop = 0.0,drop_path=0,drop=0.)
+        self.attention2 = SpatialTransformer(dim=token_dim, in_dim=token_dim, num_heads=1, mlp_ratio=1.0,attn_drop = 0.0,drop_path=0,drop=0.)
 
-        self.upsample = nn.UpsamplingBilinear2d(scale_factor=2)
+        self.upsample = nn.UpsamplingBilinear2d(2)
 
         self.num_patches = (img_size // (4 * 2 * 2)) * (img_size // (4 * 2 * 2))  # there are 3 sfot split, stride are 4,2,2 seperately
 
     def forward(self, x, encoder_list):
         B = x.shape[0]
-        x= self.proj(x)
-        B, new_HW, C = x.shape
-        x = x.transpose(1, 2).reshape(B, C, int(np.sqrt(new_HW)), int(np.sqrt(new_HW)))
-
-        x = torch.cat([encoder_list[-1],self.upsample(x)],1).view(B,self.token_dim*2,-1).transpose(1, 2)
+        # step0 decoder 0
+        x = self.proj(x).view(B,self.token_dim,-1).transpose(1, 2)
         x = self.attention1(x)
         B, new_HW, C = x.shape
         x = x.transpose(1, 2).reshape(B, C, int(np.sqrt(new_HW)), int(np.sqrt(new_HW)))
-        x = self.swt_0(x)
-        x = torch.cat([encoder_list[-2],self.upsample(x)],1).view(B,self.token_dim*2,-1).transpose(1, 2)
+
+        # step1 decoder 1
+        x = torch.cat(encoder_list[-1],self.upsample(x)).view(B,self.token_dim,-1).transpose(1, 2)
         x = self.attention2(x)
         B, new_HW, C = x.shape
         x = x.transpose(1, 2).reshape(B, C, int(np.sqrt(new_HW)), int(np.sqrt(new_HW)))
@@ -103,8 +106,8 @@ class FTN(nn.Module):
         self.decoder = FTN_decoder(
                 img_size=img_size,  in_chans=in_chans, embed_dim=embed_dim, token_dim=token_dim)
 
-        self.pre_hade_norm = nn.InstanceNorm2d(token_dim*2)
-        self.classifier = nn.Conv2d(token_dim*2, num_classes,kernel_size=3,padding=1)
+        self.pre_hade_norm = norm_layer(embed_dim)
+        self.classifier = nn.Linear(embed_dim, num_classes)
         self.avgpool = nn.AdaptiveAvgPool1d(1)
         # Dim_reduce
         self.apply(self._init_weights)
@@ -139,21 +142,21 @@ class FTN(nn.Module):
 def FTN_4(pretrained=False, **kwargs): # adopt performer for tokens to token
     if pretrained:
         kwargs.setdefault('qk_scale', 256 ** -0.5)
-    model = FTN( embed_dim=512, depth=4, num_heads=2, mlp_ratio=2.,token_dim=64,num_classes=2,  **kwargs)
+    model = FTN( embed_dim=512, depth=4, num_heads=2, mlp_ratio=2.,token_dim=64,  **kwargs)
     model.default_cfg = default_cfgs['FTN_4']
     return model
 @register_model
 def FTN_7(pretrained=False,  **kwargs): # adopt performer for tokens to token
     if pretrained:
         kwargs.setdefault('qk_scale', 256 ** -0.5)
-    model = FTN( embed_dim=256, depth=12, num_heads=3, mlp_ratio=2.,token_dim=64,num_classes=2,  **kwargs)
+    model = FTN( embed_dim=256, depth=12, num_heads=3, mlp_ratio=2.,token_dim=64,  **kwargs)
     model.default_cfg = default_cfgs['FTN_7']
     return model
 @register_model
 def FTN_12(pretrained=False,  **kwargs): # adopt performer for tokens to token
     if pretrained:
         kwargs.setdefault('qk_scale', 256 ** -0.5)
-    model = FTN( embed_dim=384, depth=12, num_heads=4, mlp_ratio=2.,token_dim=64, num_classes=2, **kwargs)
+    model = FTN( embed_dim=384, depth=12, num_heads=4, mlp_ratio=2.,token_dim=64,  **kwargs)
     model.default_cfg = default_cfgs['FTN_12']
     return model
 
