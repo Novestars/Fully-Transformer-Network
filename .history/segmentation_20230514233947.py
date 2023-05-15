@@ -52,7 +52,7 @@ class FTN_decoder(nn.Module):
 
         self.attention1 = SpatialTransformer(dim=token_dim*4, in_dim=token_dim*4, num_heads=1, mlp_ratio=1.0,attn_drop = 0.0,drop_path=0,drop=0.)
         self.attention2 = SpatialTransformer(dim=token_dim*2, in_dim=token_dim*2, num_heads=1, mlp_ratio=1.0,attn_drop = 0.0,drop_path=0,drop=0.)
-        self.swt_0 = nn.Sequential(nn.Conv2d(token_dim*4,token_dim, kernel_size=(3, 3),  padding=(1, 1)))
+        self.swt_0 = nn.Sequential(nn.Conv2d(token_dim*2,token_dim*4, kernel_size=(3, 3),  padding=(1, 1)))
 
         self.upsample = nn.UpsamplingBilinear2d(scale_factor=2)
 
@@ -64,7 +64,7 @@ class FTN_decoder(nn.Module):
         B, new_HW, C = x.shape
         x = x.transpose(1, 2).reshape(B, C, int(np.sqrt(new_HW)), int(np.sqrt(new_HW)))
 
-        x = torch.cat([encoder_list[-1],self.upsample(x)],1).view(B,self.token_dim*4,-1).transpose(1, 2)
+        x = torch.cat([encoder_list[-1],self.upsample(x)],1).view(B,self.token_dim*2,-1).transpose(1, 2)
         x = self.attention1(x)
         B, new_HW, C = x.shape
         x = x.transpose(1, 2).reshape(B, C, int(np.sqrt(new_HW)), int(np.sqrt(new_HW)))
@@ -78,13 +78,16 @@ class FTN_decoder(nn.Module):
 
 
 class FTN(nn.Module):
-    def __init__(self, img_size=448,  num_classes=9,  depth=12,token_dim=64,):
+    def __init__(self, img_size=448,  in_chans=3, num_classes=9, embed_dim=512, depth=12,
+                 num_heads=12, mlp_ratio=2., qkv_bias=False, qk_scale=None, drop_rate=0, attn_drop_rate=0,
+                 drop_path_rate=0, norm_layer=nn.LayerNorm, token_dim=64,use_meta = False):
         super().__init__()
         self.num_classes = num_classes
 
         self.encoder = FTN_encoder(
                 img_size=img_size,  token_dim=token_dim)
 
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         self.blocks = nn.ModuleList([
             SpatialTransformer(dim=token_dim*4, in_dim=token_dim*4, num_heads=(token_dim*4)//32, mlp_ratio=1.0,attn_drop = 0.0,drop_path=0,drop=0.)
             for i in range(depth)])
@@ -94,6 +97,18 @@ class FTN(nn.Module):
 
         self.pre_hade_norm = nn.InstanceNorm2d(token_dim*2)
         self.classifier = nn.Conv2d(token_dim*2, num_classes,kernel_size=3,padding=1)
+        self.avgpool = nn.AdaptiveAvgPool1d(1)
+        # Dim_reduce
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=0.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
 
     def forward_features(self, x):
         x,encoder_lsit = self.encoder(x)

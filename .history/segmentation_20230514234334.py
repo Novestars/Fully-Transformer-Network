@@ -78,7 +78,9 @@ class FTN_decoder(nn.Module):
 
 
 class FTN(nn.Module):
-    def __init__(self, img_size=448,  num_classes=9,  depth=12,token_dim=64,):
+    def __init__(self, img_size=448,  in_chans=3, num_classes=9, embed_dim=512, depth=12,
+                 num_heads=12, mlp_ratio=2., qkv_bias=False, qk_scale=None, drop_rate=0, attn_drop_rate=0,
+                 drop_path_rate=0, norm_layer=nn.LayerNorm, token_dim=64,use_meta = False):
         super().__init__()
         self.num_classes = num_classes
 

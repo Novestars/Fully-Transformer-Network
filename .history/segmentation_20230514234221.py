@@ -52,7 +52,7 @@ class FTN_decoder(nn.Module):
 
         self.attention1 = SpatialTransformer(dim=token_dim*4, in_dim=token_dim*4, num_heads=1, mlp_ratio=1.0,attn_drop = 0.0,drop_path=0,drop=0.)
         self.attention2 = SpatialTransformer(dim=token_dim*2, in_dim=token_dim*2, num_heads=1, mlp_ratio=1.0,attn_drop = 0.0,drop_path=0,drop=0.)
-        self.swt_0 = nn.Sequential(nn.Conv2d(token_dim*4,token_dim, kernel_size=(3, 3),  padding=(1, 1)))
+        self.swt_0 = nn.Sequential(nn.Conv2d(token_dim*4,token_dim*2, kernel_size=(3, 3),  padding=(1, 1)))
 
         self.upsample = nn.UpsamplingBilinear2d(scale_factor=2)
 
@@ -78,7 +78,9 @@ class FTN_decoder(nn.Module):
 
 
 class FTN(nn.Module):
-    def __init__(self, img_size=448,  num_classes=9,  depth=12,token_dim=64,):
+    def __init__(self, img_size=448,  in_chans=3, num_classes=9, embed_dim=512, depth=12,
+                 num_heads=12, mlp_ratio=2., qkv_bias=False, qk_scale=None, drop_rate=0, attn_drop_rate=0,
+                 drop_path_rate=0, norm_layer=nn.LayerNorm, token_dim=64,use_meta = False):
         super().__init__()
         self.num_classes = num_classes
 
